@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Converter</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --text: #1d1d1f;
+    --muted: #86868b;
+    --blue: #007aff;
+    --blue-press: #0066cc;
+    --blue-tint: #e8f2ff;
+    --line: #d2d2d7;
+    --track: #e5e5ea;
+    --green: #30a46c;
+    --red: #d70015;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 30px rgba(0,0,0,.06);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+            "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --card: #1c1c1e;
+      --text: #f5f5f7;
+      --muted: #98989d;
+      --blue: #0a84ff;
+      --blue-press: #409cff;
+      --blue-tint: #0b2540;
+      --line: #38383a;
+      --track: #3a3a3c;
+      --green: #32d74b;
+      --red: #ff453a;
+      --shadow: 0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    padding: 48px 20px 40px;
+  }
+  main { max-width: 600px; margin: 0 auto; }
+
+  h1 {
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .tagline { color: var(--muted); font-size: 17px; margin: 6px 0 28px; }
+
+  /* Drop zone */
+  .drop {
+    background: var(--card);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    padding: 44px 24px 36px;
+    text-align: center;
+    border: 2px solid transparent;
+    transition: border-color .15s, background-color .15s, transform .15s;
+  }
+  .drop.over { border-color: var(--blue); background: var(--blue-tint); transform: scale(1.01); }
+  .drop svg { width: 56px; height: 56px; color: var(--blue); }
+  .drop h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 14px 0 4px; }
+  .drop p { color: var(--muted); font-size: 15px; margin: 0 0 20px; }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: 0;
+  }
+  button:focus-visible, input:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--blue) 45%, transparent);
+    outline-offset: 2px;
+  }
+  .btn {
+    background: var(--blue);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 10px 22px;
+    border-radius: 980px;
+    transition: background-color .15s, opacity .15s;
+  }
+  .btn:hover { background: var(--blue-press); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .link {
+    background: none;
+    color: var(--blue);
+    font-size: 14px;
+    padding: 4px 0;
+  }
+  .link:disabled { opacity: .4; cursor: default; }
+
+  /* Section headings */
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 30px 4px 8px;
+  }
+  .section-head h3 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+
+  /* Group card (iOS inset list) */
+  .group {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 14px;
+    align-items: center;
+    padding: 12px 16px;
+    min-height: 52px;
+  }
+  .row + .row { border-top: 1px solid var(--line); }
+  .empty { color: var(--muted); font-size: 15px; padding: 22px 16px; text-align: center; }
+
+  .file-name {
+    font-size: 15px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .file-meta { font-size: 13px; color: var(--muted); }
+  .file-meta.err { color: var(--red); }
+  .file-meta.ok a { color: var(--green); text-decoration: none; }
+  .file-meta.ok a:hover { text-decoration: underline; }
+  .file-side { display: flex; align-items: center; gap: 10px; }
+  .file-pct { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); min-width: 36px; text-align: right; }
+  .x {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--track);
+    color: var(--muted);
+    font-size: 13px; line-height: 24px; padding: 0;
+  }
+  .x:hover { color: var(--text); }
+  .x:disabled { opacity: .35; cursor: default; }
+  .mini { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .mini > i { display: block; height: 100%; width: 0; background: var(--blue); transition: width .25s ease; }
+  .mini.done > i { background: var(--green); }
+
+  /* Settings */
+  .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; }
+  .setting + .setting { border-top: 1px solid var(--line); }
+  .setting label, .setting .label { font-size: 15px; }
+  .value { color: var(--muted); font-size: 15px; }
+
+  .seg { display: inline-flex; background: var(--track); border-radius: 9px; padding: 2px; }
+  .seg button {
+    background: none; color: var(--text);
+    font-size: 13px; font-weight: 500;
+    padding: 5px 13px; border-radius: 7px;
+    transition: background-color .15s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .seg button:disabled { opacity: .5; cursor: default; }
+
+  .folder { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 0; justify-content: flex-end; }
+  .folder input {
+    flex: 1; min-width: 0; max-width: 340px;
+    font: inherit; font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 10px;
+  }
+
+  /* Progress */
+  .progress { margin-top: 30px; }
+  .progress-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; padding: 0 2px; }
+  .status { font-size: 15px; color: var(--muted); }
+  .percent { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .bar { height: 10px; background: var(--track); border-radius: 5px; overflow: hidden; }
+  .bar > i {
+    display: block; height: 100%; width: 0;
+    background: var(--blue);
+    border-radius: 5px;
+    transition: width .25s ease, background-color .3s;
+  }
+  .bar.done > i { background: var(--green); }
+
+  .go { width: 100%; margin-top: 22px; font-size: 17px; padding: 14px; border-radius: 14px; }
+
+
+  [hidden] { display: none !important; }
+  .tabs { display: flex; background: var(--track); border-radius: 10px; padding: 3px; margin-bottom: 24px; }
+  .tabs button {
+    flex: 1; background: none; color: var(--text);
+    font-size: 14px; font-weight: 500;
+    padding: 8px 12px; border-radius: 8px;
+    transition: background-color .15s;
+  }
+  .tabs button[aria-selected="true"] { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+
+  /* Auto-convert */
+  .hint { font-size: 13px; color: var(--muted); margin-top: 2px; max-width: 360px; }
+  .switch {
+    position: relative; flex: none;
+    width: 51px; height: 31px; border-radius: 16px;
+    background: var(--track); padding: 0;
+    transition: background-color .2s;
+  }
+  .switch i {
+    position: absolute; top: 2px; left: 2px;
+    width: 27px; height: 27px; border-radius: 50%;
+    background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.3);
+    transition: transform .2s;
+  }
+  .switch[aria-checked="true"] { background: var(--green); }
+  .switch[aria-checked="true"] i { transform: translateX(20px); }
+  .log { border-top: 1px solid var(--line); padding: 8px 16px 12px; max-height: 200px; overflow-y: auto; }
+  .log-empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
+  .log-line { display: flex; gap: 10px; font-size: 13px; padding: 3px 0; }
+  .log-line time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  .log-line span { overflow-wrap: anywhere; }
+  .log-line.ok span { color: var(--green); }
+  .log-line.err span { color: var(--red); }
+  .log-line.info span { color: var(--text); }
+  .w-note { color: var(--red); font-size: 13px; padding: 0 16px 10px; min-height: 0; }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 32px; }
+    .setting { flex-direction: column; align-items: stretch; }
+    .folder { justify-content: stretch; }
+    .folder input { max-width: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Audio Converter</h1>
+  <p class="tagline">Your audio. Your format. Your control.</p>
+
+  <div class="tabs" role="tablist" aria-label="Mode">
+    <button type="button" role="tab" id="tab-manual" aria-selected="true">Manual</button>
+    <button type="button" role="tab" id="tab-auto" aria-selected="false">Auto-convert</button>
+  </div>
+
+  <div id="view-manual">
+  <section id="drop" class="drop" aria-label="Drop audio files here">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>
+    </svg>
+    <h2>Drop your audio here</h2>
+    <p>MP3, WAV, FLAC, M4A and more</p>
+    <button class="btn" id="choose" type="button">Choose files</button>
+    <button class="link" id="choose-folder" type="button" style="margin-left:16px">Choose folder</button>
+    <input type="file" id="folder-picker" webkitdirectory multiple hidden>
+    <input type="file" id="picker" accept="audio/*,video/mp4,video/webm,.flac,.ape,.alac,.opus,.wma,.aiff,.aif,.m4a,.aac" multiple hidden>
+  </section>
+
+  <div class="section-head">
+    <h3>Your files</h3>
+    <button class="link" id="clear" type="button">Clear all</button>
+  </div>
+  <div class="group" id="list"></div>
+
+  <div class="section-head"><h3>Settings</h3></div>
+  <div class="group">
+    <div class="setting">
+      <span class="label">Output format</span>
+      <span class="value">MP3</span>
+    </div>
+    <div class="setting">
+      <span class="label" id="bitrate-label">Bitrate</span>
+      <div class="seg seg-bitrate" id="bitrate" role="group" aria-labelledby="bitrate-label">
+        <button type="button" data-v="320k" aria-pressed="true">320k</button>
+        <button type="button" data-v="256k" aria-pressed="false">256k</button>
+        <button type="button" data-v="192k" aria-pressed="false">192k</button>
+        <button type="button" data-v="128k" aria-pressed="false">128k</button>
+      </div>
+    </div>
+    <div class="setting">
+      <label for="folder">Save to</label>
+      <div class="folder">
+        <input id="folder" type="text" spellcheck="false" placeholder="Choose a folder">
+        <button class="link" id="browse" type="button">Browse</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="progress" aria-live="polite">
+    <div class="progress-top">
+      <span class="status" id="status">Ready to convert</span>
+      <span class="percent" id="percent">0%</span>
+    </div>
+    <div class="bar" id="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+  </section>
+
+  <button class="btn go" id="go" type="button">Convert to MP3</button>
+  </div>
+
+  <div id="view-auto" hidden>
+  <div class="section-head">
+    <h3>Auto-convert</h3>
+    <span class="value" id="w-state">Off</span>
+  </div>
+  <div class="group">
+    <div class="setting">
+      <div>
+        <div class="label" id="w-enabled-label">Watch a folder</div>
+        <div class="hint">New downloads that are not MP3 are converted automatically.</div>
+      </div>
+      <button class="switch" id="w-enabled" type="button" role="switch" aria-checked="false" aria-labelledby="w-enabled-label"><i></i></button>
+    </div>
+    <div class="setting">
+      <label for="w-folder">Folder</label>
+      <div class="folder">
+        <input id="w-folder" type="text" spellcheck="false" placeholder="Choose the folder to watch">
+        <button class="link" id="w-browse" type="button">Browse</button>
+      </div>
+    </div>
+    <div class="setting">
+      <span class="label" id="w-bitrate-label">Bitrate</span>
+      <div class="seg seg-bitrate" id="w-bitrate" role="group" aria-labelledby="w-bitrate-label">
+        <button type="button" data-v="320k" aria-pressed="true">320k</button>
+        <button type="button" data-v="256k" aria-pressed="false">256k</button>
+        <button type="button" data-v="192k" aria-pressed="false">192k</button>
+        <button type="button" data-v="128k" aria-pressed="false">128k</button>
+      </div>
+    </div>
+    <div class="setting">
+      <div>
+        <div class="label" id="w-delete-label">Delete original after converting</div>
+        <div class="hint">Permanently deletes the original file. Off by default.</div>
+      </div>
+      <button class="switch" id="w-delete" type="button" role="switch" aria-checked="false" aria-labelledby="w-delete-label"><i></i></button>
+    </div>
+    <div class="setting">
+      <div>
+        <div class="label" id="w-existing-label">Also convert files already in the folder</div>
+        <div class="hint">Off means only new downloads are handled.</div>
+      </div>
+      <button class="switch" id="w-existing" type="button" role="switch" aria-checked="false" aria-labelledby="w-existing-label"><i></i></button>
+    </div>
+    <div class="setting">
+      <div>
+        <div class="label" id="w-sched-label">Keep converting when the app is closed</div>
+        <div class="hint">Windows checks the folder every 2 minutes. The app starts for a few seconds, converts any new songs, then closes by itself.</div>
+      </div>
+      <button class="switch" id="w-sched" type="button" role="switch" aria-checked="false" aria-labelledby="w-sched-label"><i></i></button>
+    </div>
+    <div class="w-note" id="w-note" role="alert"></div>
+    <div class="log" id="w-log" aria-live="polite"></div>
+  </div>
+  </div>
+</main>
+
+<script>
+const EXT = new Set(['.mp3','.wav','.flac','.m4a','.aac','.ogg','.opus','.wma','.aiff','.aif','.ape','.alac','.mp4','.webm']);
+const $ = (s) => document.querySelector(s);
+
+let items = [];
+let bitrate = '320k';
+let running = false;
+let finished = false;
+let nextId = 0;
+
+/* ---------- helpers ---------- */
+const extOf = (n) => { const i = n.lastIndexOf('.'); return i < 0 ? '' : n.slice(i).toLowerCase(); };
+const fmtSize = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+const setStatus = (t) => { $('#status').textContent = t; };
+function setOverall(p) {
+  $('#percent').textContent = p + '%';
+  $('#bar > i').style.width = p + '%';
+  $('#bar').setAttribute('aria-valuenow', p);
+}
+function resetOverall() {
+  setOverall(0);
+  $('#bar').classList.remove('done');
+}
+
+/* ---------- file list ---------- */
+function addFiles(fileList) {
+  if (running) return;
+  if (finished) { items = []; finished = false; resetOverall(); }
+
+  let skipped = 0;
+  for (const f of fileList) {
+    if (!EXT.has(extOf(f.name))) { skipped++; continue; }
+    const dupe = items.some(i => i.file.name === f.name && i.file.size === f.size && i.file.lastModified === f.lastModified);
+    if (dupe) continue;
+    items.push({ id: nextId++, file: f, percent: 0, status: 'ready', error: '', url: '' });
+  }
+  render();
+  if (items.length) {
+    setStatus(items.length + (items.length === 1 ? ' file ready' : ' files ready') + (skipped ? ' · ' + skipped + ' skipped' : ''));
+  } else if (skipped) {
+    setStatus('No supported audio files added');
+  }
+}
+
+function render() {
+  const list = $('#list');
+  list.replaceChildren();
+
+  if (!items.length) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = 'No files yet. Drop some audio above to begin.';
+    list.append(e);
+  }
+
+  items.forEach((it, idx) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const left = document.createElement('div');
+    left.style.minWidth = 0;
+    const name = document.createElement('div');
+    name.className = 'file-name';
+    name.textContent = it.file.name;
+    name.title = it.file.name;
+    const meta = document.createElement('div');
+    meta.className = 'file-meta';
+
+    if (it.status === 'error') {
+      meta.classList.add('err');
+      meta.textContent = it.error || 'Conversion failed';
+    } else if (it.status === 'done') {
+      meta.classList.add('ok');
+      const a = document.createElement('a');
+      a.href = '#';
+      a.textContent = 'Converted. Show in folder';
+      a.onclick = (e) => { e.preventDefault(); fetch(it.url, { method: 'POST' }); };
+      meta.append(a);
+    } else if (it.status === 'converting') {
+      meta.textContent = 'Converting…';
+    } else {
+      meta.textContent = fmtSize(it.file.size);
+    }
+    left.append(name, meta);
+
+    const side = document.createElement('div');
+    side.className = 'file-side';
+    const pct = document.createElement('span');
+    pct.className = 'file-pct';
+    pct.textContent = (it.status === 'ready' || it.status === 'queued') ? '' : it.percent + '%';
+    const x = document.createElement('button');
+    x.className = 'x';
+    x.type = 'button';
+    x.textContent = '✕';
+    x.setAttribute('aria-label', 'Remove ' + it.file.name);
+    x.disabled = running || finished;
+    x.onclick = () => { items.splice(idx, 1); render(); setStatus(items.length ? items.length + ' file(s) ready' : 'Ready to convert'); };
+    side.append(pct, x);
+
+    const mini = document.createElement('div');
+    mini.className = 'mini' + (it.status === 'done' ? ' done' : '');
+    const fill = document.createElement('i');
+    fill.style.width = it.percent + '%';
+    mini.append(fill);
+
+    row.append(left, side);
+    if (running || finished) row.append(mini);
+    list.append(row);
+  });
+
+  $('#clear').disabled = running || !items.length;
+}
+
+/* ---------- drag and drop ---------- */
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+// Stop the browser from opening a file dropped outside the zone.
+['dragover', 'drop'].forEach(ev => window.addEventListener(ev, (e) => e.preventDefault()));
+
+$('#choose').onclick = () => $('#picker').click();
+$('#choose-folder').onclick = () => $('#folder-picker').click();
+$('#folder-picker').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+$('#picker').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+$('#clear').onclick = () => { items = []; finished = false; resetOverall(); render(); setStatus('Ready to convert'); };
+
+/* ---------- settings ---------- */
+function setBitrate(v) {
+  bitrate = v;
+  document.querySelectorAll('.seg-bitrate button').forEach(o => o.setAttribute('aria-pressed', String(o.dataset.v === v)));
+}
+document.querySelectorAll('.seg-bitrate button').forEach(b => {
+  b.onclick = () => { setBitrate(b.dataset.v); if (!$('#view-auto').hidden) saveWatch(); };
+});
+
+$('#browse').onclick = async () => {
+  try {
+    const r = await fetch('/api/choose-folder', { method: 'POST' });
+    const d = await r.json();
+    if (d.folder) $('#folder').value = d.folder;
+  } catch (e) { setStatus('Could not open the folder picker. Type the path instead.'); }
+};
+
+/* ---------- convert ---------- */
+function lockUI(lock) {
+  running = lock;
+  $('#go').disabled = lock;
+  $('#choose').disabled = lock;
+  $('#choose-folder').disabled = lock;
+  document.querySelectorAll('#bitrate button').forEach(b => b.disabled = lock);
+  $('#folder').disabled = lock;
+  $('#browse').disabled = lock;
+  render();
+}
+
+$('#go').onclick = async () => {
+  if (!items.length) { setStatus('Add some audio files first.'); return; }
+  if (finished) { items.forEach(i => Object.assign(i, { percent: 0, status: 'ready', error: '', url: '' })); finished = false; }
+
+  resetOverall();
+  lockUI(true);
+  setStatus('Uploading…');
+
+  const fd = new FormData();
+  items.forEach(i => fd.append('files', i.file, i.file.name));
+  fd.append('bitrate', bitrate);
+  fd.append('folder', $('#folder').value.trim());
+
+  try {
+    const r = await fetch('/api/convert', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Something went wrong.');
+    poll(d.job);
+  } catch (err) {
+    lockUI(false);
+    setStatus(err.message);
+  }
+};
+
+async function poll(job) {
+  try {
+    const r = await fetch('/api/progress/' + job);
+    const d = await r.json();
+
+    d.files.forEach((f, i) => {
+      if (!items[i]) return;
+      Object.assign(items[i], { percent: f.percent, status: f.status, error: f.error || '' });
+      if (f.status === 'done') items[i].url = '/api/reveal/' + job + '/' + i;
+    });
+
+    setOverall(d.percent);
+    render();
+
+    if (d.done) {
+      const ok = d.files.filter(f => f.status === 'done').length;
+      finished = true;
+      $('#bar').classList.toggle('done', ok === d.files.length);
+      setStatus(ok + ' of ' + d.files.length + ' converted. Saved to ' + d.folder);
+      lockUI(false);
+      $('#go').textContent = 'Convert again';
+    } else {
+      const cur = d.files.findIndex(f => f.status === 'converting');
+      setStatus(cur >= 0 ? 'Converting ' + (cur + 1) + ' of ' + d.files.length + '…' : 'Starting…');
+      setTimeout(() => poll(job), 250);
+    }
+  } catch (e) {
+    lockUI(false);
+    setStatus('Lost connection to the converter.');
+  }
+}
+
+/* ---------- init ---------- */
+(async () => {
+  render();
+  try {
+    const r = await fetch('/api/config');
+    const d = await r.json();
+    $('#folder').value = d.folder;
+    if (!d.ffmpeg) setStatus('FFmpeg not found. Install it and add it to PATH.');
+  } catch (e) {}
+})();
+
+/* ---------- auto-convert (folder watcher) ---------- */
+const sw = { enabled: false, del: false, existing: false };
+const swEl = { enabled: $('#w-enabled'), del: $('#w-delete'), existing: $('#w-existing') };
+let watchLoaded = false;
+
+function paintSwitches() {
+  for (const k in swEl) swEl[k].setAttribute('aria-checked', String(sw[k]));
+}
+
+async function saveWatch() {
+  $('#w-note').textContent = '';
+  try {
+    const r = await fetch('/api/watch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: $('#w-folder').value.trim(),
+        enabled: sw.enabled,
+        delete_original: sw.del,
+        convert_existing: sw.existing,
+        bitrate: bitrate
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      sw.enabled = false;
+      paintSwitches();
+      $('#w-note').textContent = d.error || 'Could not save.';
+      return;
+    }
+    paintWatch(d, false);
+  } catch (e) {
+    $('#w-note').textContent = 'Lost connection to the converter.';
+  }
+}
+
+function paintWatch(d, setControls) {
+  if (setControls) {
+    $('#w-folder').value = d.folder || '';
+    sw.enabled = d.enabled; sw.del = d.delete_original; sw.existing = d.convert_existing;
+    if (d.bitrate) setBitrate(d.bitrate);
+    paintSwitches();
+  }
+  const label = { on: 'Watching', background: 'Watching in background', off: d.enabled ? 'Not running' : 'Off' };
+  $('#w-state').textContent = label[d.state] || 'Off';
+
+  const box = $('#w-log');
+  box.replaceChildren();
+  if (!d.log.length) {
+    const e = document.createElement('div');
+    e.className = 'log-empty';
+    e.textContent = 'Activity will appear here.';
+    box.append(e);
+  }
+  d.log.slice(0, 15).forEach(en => {
+    const line = document.createElement('div');
+    line.className = 'log-line ' + en.kind;
+    const t = document.createElement('time'); t.textContent = en.time;
+    const sp = document.createElement('span'); sp.textContent = en.text;
+    line.append(t, sp);
+    box.append(line);
+  });
+}
+
+async function refreshWatch() {
+  try {
+    const r = await fetch('/api/watch');
+    const d = await r.json();
+    paintWatch(d, !watchLoaded);
+    watchLoaded = true;
+  } catch (e) {}
+}
+
+for (const k in swEl) {
+  swEl[k].onclick = () => { sw[k] = !sw[k]; paintSwitches(); saveWatch(); };
+}
+$('#w-folder').onchange = saveWatch;
+$('#w-browse').onclick = async () => {
+  try {
+    const r = await fetch('/api/choose-folder', { method: 'POST' });
+    const d = await r.json();
+    if (d.folder) { $('#w-folder').value = d.folder; saveWatch(); }
+  } catch (e) { $('#w-note').textContent = 'Could not open the folder picker. Type the path instead.'; }
+};
+
+/* ---------- background check (Windows scheduled task) ---------- */
+const schedEl = $('#w-sched');
+let schedOn = false;
+const paintSched = () => schedEl.setAttribute('aria-checked', String(schedOn));
+
+async function refreshSchedule() {
+  try {
+    const r = await fetch('/api/schedule');
+    const d = await r.json();
+    schedOn = !!d.enabled;
+    paintSched();
+  } catch (e) {}
+}
+
+schedEl.onclick = async () => {
+  $('#w-note').textContent = '';
+  const want = !schedOn;
+  if (want && (!sw.enabled || !$('#w-folder').value.trim())) {
+    $('#w-note').textContent = 'Choose a folder and turn on Watch a folder first.';
+    return;
+  }
+  try {
+    const r = await fetch('/api/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: want, minutes: 2 })
+    });
+    const d = await r.json();
+    if (!r.ok) { $('#w-note').textContent = d.error || 'Could not change the background check.'; return; }
+    schedOn = !!d.enabled;
+    paintSched();
+  } catch (e) { $('#w-note').textContent = 'Lost connection to the converter.'; }
+};
+
+/* ---------- tabs ---------- */
+function showTab(which) {
+  const auto = which === 'auto';
+  $('#view-manual').hidden = auto;
+  $('#view-auto').hidden = !auto;
+  $('#tab-manual').setAttribute('aria-selected', String(!auto));
+  $('#tab-auto').setAttribute('aria-selected', String(auto));
+  if (auto) { refreshWatch(); refreshSchedule(); }
+}
+$('#tab-manual').onclick = () => showTab('manual');
+$('#tab-auto').onclick = () => showTab('auto');
+
+refreshWatch();
+setInterval(() => { if (!$('#view-auto').hidden) refreshWatch(); }, 3000);
+</script>
+</body>
+</html>
